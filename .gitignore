@@ -1,0 +1,8 @@
+theos
+.DS_Store
+obj
+_
+.theos
+*.deb
+*.log
+InspCWrapper.m
