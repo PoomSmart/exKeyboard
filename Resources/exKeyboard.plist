@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>title</key>
+    <string>exKeyboard</string>
+    <key>entry</key>
+    <dict>
+      <key>cell</key>
+      <string>PSLinkCell</string>
+      <key>icon</key>
+      <string>exK.png</string>
+      <key>label</key>
+      <string>exKeyboard</string>
+    </dict>
+    <key>items</key>
+    <array>
+      <dict>
+        <key>cell</key>
+        <string>PSGroupCell</string>
+      </dict>
+       <dict>
+        	<key>cell</key>
+        	<string>PSSwitchCell</string>
+        	<key>default</key>
+        	<true/>
+        	<key>defaults</key>
+        	<string>com.PS.exKeyboard</string>
+        	<key>key</key>
+        	<string>enabled</string>
+        	<key>label</key>
+        	<string>Enable Tweak</string>
+        	<key>PostNotification</key>
+        	<string>com.PS.exKeyboard.prefs</string>
+      </dict>
+      <dict>
+        	<key>cell</key>
+        	<string>PSSwitchCell</string>
+        	<key>default</key>
+        	<true/>
+        	<key>defaults</key>
+        	<string>com.PS.exKeyboard</string>
+        	<key>key</key>
+        	<string>noFullAccess</string>
+        	<key>label</key>
+        	<string>No Full Access</string>
+        	<key>PostNotification</key>
+        	<string>com.PS.exKeyboard.prefs</string>
+      </dict>
+      <dict>
+        	<key>cell</key>
+        	<string>PSSwitchCell</string>
+        	<key>default</key>
+        	<true/>
+        	<key>defaults</key>
+        	<string>com.PS.exKeyboard</string>
+        	<key>key</key>
+        	<string>noPrivate</string>
+        	<key>label</key>
+        	<string>Disable in secure text form</string>
+        	<key>PostNotification</key>
+        	<string>com.PS.exKeyboard.prefs</string>
+      </dict>
+      <dict>
+        	<key>cell</key>
+        	<string>PSSwitchCell</string>
+        	<key>default</key>
+        	<false/>
+        	<key>defaults</key>
+        	<string>com.PS.exKeyboard</string>
+        	<key>key</key>
+        	<string>allowLS</string>
+        	<key>label</key>
+        	<string>Allow in lockscreen</string>
+        	<key>PostNotification</key>
+        	<string>com.PS.exKeyboard.prefs</string>
+      </dict>
+      <dict>
+        <key>cell</key>
+        <string>PSGroupCell</string>
+        <key>footerAlignment</key>
+        <integer>1</integer>
+        <key>footerText</key>
+        <string>© 2013 - 2015 Thatchapon Unprasert
+(@PoomSmart)</string>
+      </dict>
+    </array>
+  </dict>
+</plist>
