@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import "../PS.h"
 
 //#include "InspCWrapper.m"
 
@@ -15,7 +16,9 @@
 @interface UIKeyboardInputMode : NSObject
 + (UIKeyboardInputMode *)keyboardInputModeWithIdentifier:(NSString *)identifier;
 @property(nonatomic, assign) NSString *normalizedIdentifier;
+@property(nonatomic, assign) NSString *primaryLanguage;
 - (BOOL)isExtensionInputMode;
+- (BOOL)defaultLayoutIsASCIICapable;
 @end
 
 @interface UIKeyboardInputModeController : NSObject
@@ -203,7 +206,7 @@ BOOL allowLS;
 - (void)insertText:(id)text
 {
 	%orig;
-	if (text /*&& currentKeyboardIsThirdParty()*/) {
+	if (text && currentKeyboardIsThirdParty()) {
 		if (self.changedDelegate == nil) {
 			[self setChanged];
 			[self callChanged];
@@ -271,10 +274,12 @@ MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
 
 %hook UIKeyboardExtensionInputMode
 
+%group preiOS9
+
 - (BOOL)isAllowedForTraits:(UITextInputTraits *)traits
 {
 	NSString *identifier = self.normalizedIdentifier;
-	BOOL secure = noPrivate && traits.secureTextEntry;
+	BOOL secure = !noPrivate && traits.secureTextEntry;
 	BOOL value = YES;
 	if (secure) {
 		BOOL secure2 = UIKeyboardLayoutDefaultTypeForInputModeIsSecure(identifier);
@@ -293,7 +298,7 @@ MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
 - (BOOL)isDesiredForTraits:(UITextInputTraits *)traits forceASCIICapable:(BOOL)forceASCII
 {
 	NSString *identifier = self.normalizedIdentifier;
-	BOOL secure = noPrivate && traits.secureTextEntry;
+	BOOL secure = !noPrivate && traits.secureTextEntry;
 	BOOL value = NO;
 	if (secure)
 		value = UIKeyboardLayoutDefaultTypeForInputModeIsSecure(identifier);
@@ -309,6 +314,32 @@ MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
 	}
 	return value;
 }
+
+%end
+
+%group iOS9
+
+- (BOOL)isDesiredForTraits:(UITextInputTraits *)traits
+{
+	NSString *identifier = self.normalizedIdentifier;
+	BOOL secure = !noPrivate && traits.secureTextEntry;
+	BOOL value = NO;
+	if (secure)
+		value = UIKeyboardLayoutDefaultTypeForInputModeIsSecure(identifier);
+	else {
+		if (![self defaultLayoutIsASCIICapable])
+			value = [self.primaryLanguage hasPrefix:@"ko"];
+		else {
+			BOOL requiresASCII = [%c(UITextInputTraits) keyboardTypeRequiresASCIICapable:traits.keyboardType];
+			value = YES;
+			if (requiresASCII)
+				value = UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended(identifier);
+		}
+	}
+	return value;
+}
+
+%end
 
 %end
 
@@ -400,6 +431,11 @@ static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStrin
 					UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended = (BOOL (*)(NSString *))MSFindSymbol(UIKIT, "_UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended");
 				}
 				MSHookFunction(TCCAccessCopyInformationForBundle, MSHake(TCCAccessCopyInformationForBundle));
+				if (isiOS9Up) {
+					%init(iOS9);
+				} else {
+					%init(preiOS9);
+				}
 				%init;
 			}
 			if (isSpringBoard) {
@@ -408,8 +444,7 @@ static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStrin
 			}
 			if (isbackboardd) {
 				const char *qc = "/System/Library/Frameworks/QuartzCore.framework/QuartzCore";
-				dlopen(qc, RTLD_LAZY);
-				MSImageRef qcRef = MSGetImageByName(qc);		
+				MSImageRef qcRef = MSGetImageByName(qc);
 				my_allowed_in_secure_update = (BOOL (*)(void *, void *))MSFindSymbol(qcRef, "__ZN2CA6Render6Update24allowed_in_secure_updateEPNS0_7ContextEPKNS0_9LayerHostE");
 				MSHookFunction((void *)my_allowed_in_secure_update, (void *)hax_allowed_in_secure_update, (void **)&orig_allowed_in_secure_update);
 			}

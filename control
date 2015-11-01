@@ -1,9 +1,8 @@
-Package: com.ps.exkeyboard
+Package: org.thebigboss.exkeyboard
 Name: exKeyboard
 Depends: mobilesubstrate, preferenceloader, firmware (>= 8.0)
-Version: 1.0
+Version: 1.1
 Architecture: iphoneos-arm
 Description: 3rd-party keyboard anywhere.
 Author: PoomSmart
 Section: Tweaks
-Depiction: http://PoomSmart.github.io/repo/exkeyboard/index.html

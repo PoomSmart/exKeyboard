@@ -1,1 +1,11 @@
-{ Filter = { Bundles = ( "com.apple.UIKit" ); }; }
+{
+	Filter = {
+		Mode = Any;
+		Executables = (
+			backboardd,
+		);
+		Bundles = (
+			"com.apple.UIKit",
+		);
+	};
+}
