@@ -101,16 +101,12 @@
 - (NSBundle *)_extensionBundle;
 @end
 
-BOOL (*UIKeyboardLayoutDefaultTypeForInputModeIsSecure)(NSString *);
-BOOL (*UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapable)(NSString *);
-BOOL (*UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended)(NSString *);
-
 extern "C" BOOL currentKeyboardIsThirdParty()
 {
 	return [UIKeyboardInputModeController.sharedInputModeController.currentInputMode isExtensionInputMode];
 }
 
-extern "C" BOOL has4DigitsPasscode()
+extern "C" BOOL hasFixedDigitsPasscode()
 {
 	BOOL value = NO;
 	SBLockScreenManager *manager = (SBLockScreenManager *)[%c(SBLockScreenManager) sharedInstance];
@@ -119,7 +115,7 @@ extern "C" BOOL has4DigitsPasscode()
 		SBLockScreenView *lockScreenView = [lockScreenViewController lockScreenView];
 		if ([lockScreenView isKindOfClass:%c(SBLockScreenView)]) {
 			SBUIPasscodeLockView *view = MSHookIvar<SBUIPasscodeLockView *>(lockScreenView, "_passcodeView");
-			if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)]) {
+			if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimpleFixedDigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewLongNumericKeypad)]) {
 				SBUINumericPasscodeEntryFieldBase *field = (SBUINumericPasscodeEntryFieldBase *)[(SBUIPasscodeLockViewWithKeyPad *)view _entryField];
 				if ([field isKindOfClass:%c(SBUINumericPasscodeEntryFieldBase)])
 					value = [field _hasMaxDigitsSpecified];
@@ -137,7 +133,7 @@ extern "C" void enableCustomKeyboardIfNecessary(UIPeripheralHost *self)
 		SBLockScreenView *lockScreenView = [lockScreenViewController lockScreenView];
 		if ([lockScreenView isKindOfClass:%c(SBLockScreenView)]) {
 			SBUIPasscodeLockView *view = MSHookIvar<SBUIPasscodeLockView *>(lockScreenView, "_passcodeView");
-			if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)]) {
+			if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimpleFixedDigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewLongNumericKeypad)]) {
 				SBUINumericPasscodeEntryFieldBase *field = (SBUINumericPasscodeEntryFieldBase *)[(SBUIPasscodeLockViewWithKeyPad *)view _entryField];
 				if ([field isKindOfClass:%c(SBUINumericPasscodeEntryFieldBase)]) {
 					BOOL enabled = ![field _hasMaxDigitsSpecified];
@@ -160,7 +156,7 @@ BOOL allowLS;
 {
 	%orig;
 	if (allowLS)
-		UIPeripheralHost.sharedInstance.automaticAppearanceEnabled = !has4DigitsPasscode();
+		UIPeripheralHost.sharedInstance.automaticAppearanceEnabled = !hasFixedDigitsPasscode();
 }
 
 %end
@@ -278,40 +274,15 @@ MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
 
 - (BOOL)isAllowedForTraits:(UITextInputTraits *)traits
 {
-	NSString *identifier = self.normalizedIdentifier;
-	BOOL secure = !noPrivate && traits.secureTextEntry;
-	BOOL value = YES;
-	if (secure) {
-		BOOL secure2 = UIKeyboardLayoutDefaultTypeForInputModeIsSecure(identifier);
-		if (secure2) {
-			if (traits.keyboardType == 1)
-				value = UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended(identifier);
-		} else
-			value = NO;
-	} else {
-		if (traits.keyboardType == 1)
-			value = UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended(identifier);
-	}
+	BOOL secure = traits.secureTextEntry;
+	BOOL value = secure ? !noPrivate : YES;
 	return value;
 }
 
 - (BOOL)isDesiredForTraits:(UITextInputTraits *)traits forceASCIICapable:(BOOL)forceASCII
 {
-	NSString *identifier = self.normalizedIdentifier;
-	BOOL secure = !noPrivate && traits.secureTextEntry;
-	BOOL value = NO;
-	if (secure)
-		value = UIKeyboardLayoutDefaultTypeForInputModeIsSecure(identifier);
-	else {
-		if (forceASCII)
-			value = UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapable(identifier);
-		else {
-			BOOL requiresASCII = [%c(UITextInputTraits) keyboardTypeRequiresASCIICapable:traits.keyboardType];
-			value = YES;
-			if (requiresASCII)
-				value = UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended(identifier);
-		}
-	}
+	BOOL secure = traits.secureTextEntry;
+	BOOL value = secure ? !noPrivate : YES;
 	return value;
 }
 
@@ -321,21 +292,8 @@ MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
 
 - (BOOL)isDesiredForTraits:(UITextInputTraits *)traits
 {
-	NSString *identifier = self.normalizedIdentifier;
-	BOOL secure = !noPrivate && traits.secureTextEntry;
-	BOOL value = NO;
-	if (secure)
-		value = UIKeyboardLayoutDefaultTypeForInputModeIsSecure(identifier);
-	else {
-		if (![self defaultLayoutIsASCIICapable])
-			value = [self.primaryLanguage hasPrefix:@"ko"];
-		else {
-			BOOL requiresASCII = [%c(UITextInputTraits) keyboardTypeRequiresASCIICapable:traits.keyboardType];
-			value = YES;
-			if (requiresASCII)
-				value = UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended(identifier);
-		}
-	}
+	BOOL secure = traits.secureTextEntry;
+	BOOL value = secure ? !noPrivate : YES;
 	return value;
 }
 
@@ -350,7 +308,7 @@ MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
 - (void)reloadInputViews
 {
 	if (allowLS) {
-		if (has4DigitsPasscode())
+		if (hasFixedDigitsPasscode())
 			return;
 	}
 	%orig;
@@ -423,13 +381,8 @@ static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStrin
 				letsprefs();
 				if (!enabled)
 					return;
-				if (!isExtension) {
+				if (!isExtension)
 					CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, &prefsChanged, PreferencesNotification, NULL, CFNotificationSuspensionBehaviorCoalesce);
-					MSImageRef UIKIT = MSGetImageByName("/System/Library/Frameworks/UIKit.framework/UIKit");
-					UIKeyboardLayoutDefaultTypeForInputModeIsSecure = (BOOL (*)(NSString *))MSFindSymbol(UIKIT, "_UIKeyboardLayoutDefaultTypeForInputModeIsSecure");
-					UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapable = (BOOL (*)(NSString *))MSFindSymbol(UIKIT, "_UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapable");
-					UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended = (BOOL (*)(NSString *))MSFindSymbol(UIKIT, "_UIKeyboardLayoutDefaultTypeForInputModeIsASCIICapableExtended");
-				}
 				MSHookFunction(TCCAccessCopyInformationForBundle, MSHake(TCCAccessCopyInformationForBundle));
 				if (isiOS9Up) {
 					%init(iOS9);
