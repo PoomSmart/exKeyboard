@@ -1,8 +1,6 @@
 #import <UIKit/UIKit.h>
 #import "../PS.h"
 
-//#include "InspCWrapper.m"
-
 @interface UIInputViewAnimationStyle : NSObject
 @property BOOL force;
 @end
@@ -236,16 +234,8 @@ MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
 				}
 			}
 		}
-		if (enabled) {
-			/*NSLog(@"%@", info);
-			NSMutableArray *newInfo = [NSMutableArray arrayWithArray:(NSArray *)info];
-			NSMutableDictionary *service = [NSMutableDictionary dictionary];
-			[service addEntriesFromDictionary:newInfo[0]];
-			service[(NSString *)kTCCInfoGranted] = @NO;
-			newInfo[0] = service;
-			NSLog(@"%@", newInfo);*/
+		if (enabled)
 			return (CFArrayRef)@[];
-		}
 	}
 	return info;
 }
@@ -377,23 +367,25 @@ static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStrin
 			BOOL isExtensionOrApp = [executablePath rangeOfString:@"/Application"].location != NSNotFound;
 			BOOL isExtension = [executablePath rangeOfString:@"appex"].location != NSNotFound;
 			BOOL isbackboardd = [processName isEqualToString:@"backboardd"];
-			if (isExtensionOrApp || isSpringBoard) {
+			BOOL istccd = [processName isEqualToString:@"tccd"];
+			if (isExtensionOrApp || isSpringBoard || istccd) {
 				letsprefs();
 				if (!enabled)
 					return;
 				if (!isExtension)
 					CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, &prefsChanged, PreferencesNotification, NULL, CFNotificationSuspensionBehaviorCoalesce);
 				MSHookFunction(TCCAccessCopyInformationForBundle, MSHake(TCCAccessCopyInformationForBundle));
-				if (isiOS9Up) {
-					%init(iOS9);
-				} else {
-					%init(preiOS9);
+				if (!istccd) {
+					if (isiOS9Up) {
+						%init(iOS9);
+					} else {
+						%init(preiOS9);
+					}
+					%init;
 				}
-				%init;
 			}
 			if (isSpringBoard) {
 				%init(SpringBoard);
-				//watchClass(%c(UIInputSetHostView));
 			}
 			if (isbackboardd) {
 				const char *qc = "/System/Library/Frameworks/QuartzCore.framework/QuartzCore";
