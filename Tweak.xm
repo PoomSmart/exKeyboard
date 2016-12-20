@@ -1,65 +1,6 @@
 #import <UIKit/UIKit.h>
 #import "../PS.h"
 
-@interface UIInputViewAnimationStyle : NSObject
-@property BOOL force;
-@end
-
-@interface UIKeyboardImpl : NSObject
-@property(retain, nonatomic) id changedDelegate;
-- (void)setChanged;
-- (void)callChanged;
-@end
-
-@interface UIKeyboardInputMode : NSObject
-+ (UIKeyboardInputMode *)keyboardInputModeWithIdentifier:(NSString *)identifier;
-@property(nonatomic, assign) NSString *normalizedIdentifier;
-@property(nonatomic, assign) NSString *primaryLanguage;
-- (BOOL)isExtensionInputMode;
-- (BOOL)defaultLayoutIsASCIICapable;
-@end
-
-@interface UIKeyboardInputModeController : NSObject
-+ (UIKeyboardInputModeController *)sharedInputModeController;
-@property(atomic, strong, readwrite) NSArray *normalizedInputModes;
-- (NSArray *)extensionInputModes;
-- (NSArray *)allowedExtensions;
-- (UIKeyboardInputMode *)currentInputMode;
-@end
-
-@interface UICompatibilityInputViewController : NSObject
-@property(retain, nonatomic) UIKeyboardInputMode *inputMode;
-@end
-
-@interface UIInputViewController (Addition)
-- (UICompatibilityInputViewController *)_compatibilityController;
-@end
-
-@interface UIInputViewSet : NSObject
-- (UIInputViewController *)inputViewController;
-@end
-
-@interface UIKeyboardExtensionInputMode : UIKeyboardInputMode
-@end
-
-@interface UITextInputTraits : NSObject
-@property(nonatomic, getter=isSecureTextEntry) BOOL secureTextEntry;
-@property(nonatomic) UIKeyboardAppearance keyboardAppearance;
-@property(nonatomic) NSInteger keyboardType;
-+ (BOOL)keyboardTypeRequiresASCIICapable:(NSInteger)keyboardType;
-@end
-
-@interface UIPeripheralHost : NSObject
-+ (UIPeripheralHost *)sharedInstance;
-@property(nonatomic) BOOL automaticAppearanceEnabled;
-- (void)_setReloadInputViewsForcedIsAllowed:(BOOL)allowed;
-- (BOOL)automaticAppearanceReallyEnabled;
-- (UIInputViewSet *)inputViews;
-@end
-
-@interface UIKeyboard : UIView
-@end
-
 @interface SBPasscodeKeyboard : UIKeyboard
 - (void)minimize;
 @end
@@ -90,14 +31,24 @@
 - (SBLockScreenViewController *)lockScreenViewController;
 @end
 
-@interface PSSystemPolicyForApp : NSObject
-@property(copy) NSString *bundleIdentifier;
+@interface PKPlugInCore : NSObject
+@property(retain, nonatomic) NSDictionary *attributes;
+@property(retain, nonatomic) NSDictionary *plugInDictionary;
 @end
 
-@interface NSExtension : NSObject
-@property(copy) NSString *identifier;
-- (NSBundle *)_extensionBundle;
+@interface PKDPlugIn : PKPlugInCore
+- (NSMutableSet *)allowedTCCServices;
 @end
+
+extern CFStringRef *kTCCServiceKeyboardNetwork;
+extern CFStringRef *kTCCInfoGranted;
+extern "C" CFArrayRef TCCAccessCopyInformationForBundle(CFBundleRef);
+
+BOOL isKeyboardExtension(NSBundle *bundle)
+{
+	id val = bundle.infoDictionary[@"NSExtension"][@"NSExtensionPointIdentifier"];
+	return val ? [val isEqualToString:@"com.apple.keyboard-service"] : NO;
+}
 
 extern "C" BOOL currentKeyboardIsThirdParty()
 {
@@ -211,52 +162,37 @@ BOOL allowLS;
 
 %end
 
-extern CFStringRef *kTCCServiceKeyboardNetwork;
-extern CFStringRef *kTCCInfoGranted;
-extern "C" CFArrayRef TCCAccessCopyInformationForBundle(CFBundleRef);
+%group pkd
 
-MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
+%hook PKPlugInCore
+
+- (NSDictionary *)attributes
 {
-	CFArrayRef info = _TCCAccessCopyInformationForBundle(bundle);
-	CFStringRef bundleIdentifier = CFBundleGetIdentifier(bundle);
-	if (noFullAccess) {
-		NSArray *extensions = [[UIKeyboardInputModeController sharedInputModeController] allowedExtensions];
-		BOOL enabled = NO;
-		for (NSExtension *extension in extensions) {
-			if ([extension isKindOfClass:[NSExtension class]]) {
-				NSBundle *keyboardBundle = [extension _extensionBundle];
-				if (keyboardBundle) {
-					NSString *extensionIdentifier = keyboardBundle.bundleIdentifier;
-					if ([extensionIdentifier hasPrefix:(NSString *)bundleIdentifier]) {
-						enabled = YES;
-						break;
-					}
-				}
-			}
-		}
-		if (enabled)
-			return (CFArrayRef)@[];
+	NSDictionary *attrs = %orig;
+	if (enabled && noFullAccess && [self.plugInDictionary[@"NSExtensionPointIdentifier"] isEqualToString:@"com.apple.keyboard-service"]) {
+		NSMutableDictionary *m_attrs = [NSMutableDictionary dictionary];
+		[m_attrs addEntriesFromDictionary:attrs];
+		m_attrs[@"RequestsOpenAccess"] = @0;
+		return m_attrs;
 	}
-	return info;
+	return attrs;
 }
 
-/*%hook PSSystemPolicyForApp
+%end
 
-- (id)_privacyAccessForService:(CFStringRef)service
+%hook PKDPlugIn
+
+- (NSMutableSet *)allowedTCCServices
 {
-	if (noFullAccess && [UIKeyboardInputModeController.sharedInputModeController.normalizedInputModes containsObject:self.bundleIdentifier])
-		return @0;
-	return %orig;
+	NSMutableSet *set = %orig;
+	if (enabled && noFullAccess && [self.plugInDictionary[@"NSExtensionPointIdentifier"] isEqualToString:@"com.apple.keyboard-service"])
+		[set removeObject:(NSString *)kTCCServiceKeyboardNetwork];
+	return set;
 }
 
-- (id)privacyAccessForSpecifier:(id)specifier
-{
-	if (noFullAccess && [UIKeyboardInputModeController.sharedInputModeController.normalizedInputModes containsObject:self.bundleIdentifier])
-		return @0;
-	return %orig;
-}
+%end
 
-%end*/
+%end
 
 %hook UIKeyboardExtensionInputMode
 
@@ -328,6 +264,24 @@ MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
 
 %end
 
+%group tccd
+
+%hookf(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle)
+{
+	CFArrayRef info = %orig(bundle);
+	//CFStringRef bundleIdentifier = CFBundleGetIdentifier(bundle);
+	if (noFullAccess) {
+		NSBundle *nsBundle = (NSBundle *)bundle;
+		if (enabled && isKeyboardExtension(nsBundle)) {
+			NSLog(@"%@", info);
+			return (CFArrayRef)@[];
+		}
+	}
+	return info;
+}
+
+%end
+
 BOOL (*my_allowed_in_secure_update)(void *, void *);
 BOOL (*orig_allowed_in_secure_update)(void *, void *);
 BOOL hax_allowed_in_secure_update(void *arg1, void *arg2)
@@ -367,27 +321,31 @@ static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStrin
 			BOOL isExtensionOrApp = [executablePath rangeOfString:@"/Application"].location != NSNotFound;
 			BOOL isExtension = [executablePath rangeOfString:@"appex"].location != NSNotFound;
 			BOOL isbackboardd = [processName isEqualToString:@"backboardd"];
+			BOOL ispkd = [processName isEqualToString:@"pkd"];
 			BOOL istccd = [processName isEqualToString:@"tccd"];
-			if (isExtensionOrApp || isSpringBoard || istccd) {
+			if (!isExtension && !isKeyboardExtension(NSBundle.mainBundle))
+				CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, &prefsChanged, PreferencesNotification, NULL, CFNotificationSuspensionBehaviorCoalesce);
+			if (isExtensionOrApp || isSpringBoard) {
 				letsprefs();
 				if (!enabled)
 					return;
-				if (!isExtension)
-					CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, &prefsChanged, PreferencesNotification, NULL, CFNotificationSuspensionBehaviorCoalesce);
-				MSHookFunction(TCCAccessCopyInformationForBundle, MSHake(TCCAccessCopyInformationForBundle));
-				if (!istccd) {
-					if (isiOS9Up) {
-						%init(iOS9);
-					} else {
-						%init(preiOS9);
-					}
-					%init;
+				if (isiOS9Up) {
+					%init(iOS9);
+				} else {
+					%init(preiOS9);
 				}
+				%init;
 			}
-			if (isSpringBoard) {
+			else if (ispkd) {
+				%init(pkd);
+			}
+			else if (istccd) {
+				%init(tccd);
+			}
+			else if (isSpringBoard) {
 				%init(SpringBoard);
 			}
-			if (isbackboardd) {
+			else if (isbackboardd) {
 				const char *qc = "/System/Library/Frameworks/QuartzCore.framework/QuartzCore";
 				MSImageRef qcRef = MSGetImageByName(qc);
 				my_allowed_in_secure_update = (BOOL (*)(void *, void *))MSFindSymbol(qcRef, "__ZN2CA6Render6Update24allowed_in_secure_updateEPNS0_7ContextEPKNS0_9LayerHostE");

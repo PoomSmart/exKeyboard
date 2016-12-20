@@ -3,7 +3,8 @@
 		Mode = Any;
 		Executables = (
 			backboardd,
-			tccd
+			tccd,
+			pkd
 		);
 		Bundles = (
 			"com.apple.UIKit",
