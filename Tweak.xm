@@ -32,18 +32,20 @@ extern "C" BOOL hasFixedDigitsPasscode(){
 }
 
 extern "C" void enableCustomKeyboardIfNecessary(UIPeripheralHost *self){
+    if (UIApplication.sharedApplication == nil)
+        return;
     SBLockScreenManager *manager = (SBLockScreenManager *)[%c(SBLockScreenManager) sharedInstance];
     if (manager) {
         SBLockScreenViewController *lockScreenViewController = [manager lockScreenViewController];
+        if (![lockScreenViewController respondsToSelector:@selector(lockScreenView)]) // because it is dashboard (iOS 10) (correct?)
+            return;
         SBLockScreenView *lockScreenView = [lockScreenViewController lockScreenView];
         if ([lockScreenView isKindOfClass:%c(SBLockScreenView)]) {
             SBUIPasscodeLockView *view = MSHookIvar<SBUIPasscodeLockView *>(lockScreenView, "_passcodeView");
             if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimpleFixedDigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewLongNumericKeypad)]) {
                 SBUINumericPasscodeEntryFieldBase *field = (SBUINumericPasscodeEntryFieldBase *)[(SBUIPasscodeLockViewWithKeyPad *) view _entryField];
-                if ([field isKindOfClass:%c(SBUINumericPasscodeEntryFieldBase)]) {
-                    BOOL enabled = ![field _hasMaxDigitsSpecified];
-                    self.automaticAppearanceEnabled = enabled;;
-                }
+                if ([field isKindOfClass:%c(SBUINumericPasscodeEntryFieldBase)])
+                    self.automaticAppearanceEnabled = ![field _hasMaxDigitsSpecified];
             } else
                 self.automaticAppearanceEnabled = YES;
         }
@@ -68,17 +70,9 @@ BOOL allowLS;
 
 %hook UIPeripheralHost
 
-- (UIInputViewSet *)_inputViewsForResponder: (UIResponder *)responder withAutomaticKeyboard: (id)keyboard
+- (UIInputViewSet *)_inputViewsForResponder: (UIResponder *)responder withAutomaticKeyboard: (BOOL)keyboard
 {
-    if (allowLS)
-        enableCustomKeyboardIfNecessary(self);
-    return %orig;
-}
-
-- (void)_reloadInputViewsForResponder:(UIResponder *)responder {
-    if (allowLS)
-        enableCustomKeyboardIfNecessary(self);
-    %orig;
+    return %orig(responder, allowLS ? NO : keyboard);
 }
 
 - (void)setInputViews:(id)inputViews animationStyle:(UIInputViewAnimationStyle *)style {
@@ -184,8 +178,7 @@ BOOL haxAllowExtensions3 = NO;
 
 - (BOOL)isSecureTextEntry
 {
-    BOOL orig = %orig;
-    return haxAllowExtensions && orig ? NO : orig;
+    return haxAllowExtensions ? NO : %orig;
 }
 
 %end
@@ -197,6 +190,10 @@ BOOL haxAllowExtensions3 = NO;
     haxAllowExtensions = !noPrivate;
     %orig;
     haxAllowExtensions = NO;
+}
+
+- (NSMutableArray *)desirableInputModesWithExtensions:(BOOL)extensions {
+    return %orig(!noPrivate && !extensions ? YES : extensions);
 }
 
 %end
@@ -219,6 +216,13 @@ BOOL haxAllowExtensions3 = NO;
 }
 
 - (NSMutableArray *)extensionInputModes {
+    haxAllowExtensions2 = allowLS;
+    NSMutableArray *orig = %orig;
+    haxAllowExtensions2 = NO;
+    return orig;
+}
+
+- (NSMutableArray *)enabledInputModeIdentifiers:(BOOL)arg1 {
     haxAllowExtensions2 = allowLS;
     NSMutableArray *orig = %orig;
     haxAllowExtensions2 = NO;
@@ -298,8 +302,8 @@ CFStringRef PreferencesNotification = CFSTR("com.PS.exKeyboard.prefs");
 
 static void letsprefs(){
     #ifdef SIMULATOR
-    enabled = noFullAccess = allowLS = YES;
-    noPrivate = NO;
+    enabled = allowLS = YES;
+    noPrivate = noFullAccess = NO;
     #else
     NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.PS.exKeyboard.plist"];
     id object = [prefs objectForKey:@"enabled"];
