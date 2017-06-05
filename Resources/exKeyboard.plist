@@ -9,7 +9,7 @@
       <key>cell</key>
       <string>PSLinkCell</string>
       <key>icon</key>
-      <string>exK.png</string>
+      <string>exKeyboard.png</string>
       <key>label</key>
       <string>exKeyboard</string>
     </dict>
@@ -30,20 +30,6 @@
         	<string>enabled</string>
         	<key>label</key>
         	<string>Enable Tweak</string>
-        	<key>PostNotification</key>
-        	<string>com.PS.exKeyboard.prefs</string>
-      </dict>
-      <dict>
-        	<key>cell</key>
-        	<string>PSSwitchCell</string>
-        	<key>default</key>
-        	<true/>
-        	<key>defaults</key>
-        	<string>com.PS.exKeyboard</string>
-        	<key>key</key>
-        	<string>noFullAccess</string>
-        	<key>label</key>
-        	<string>No Full Access</string>
         	<key>PostNotification</key>
         	<string>com.PS.exKeyboard.prefs</string>
       </dict>

@@ -1,11 +1,12 @@
 DEBUG = 1
 PACKAGE_VERSION = 1.2.5
+GO_EASY_ON_ME = 1
 
 ifeq ($(SIMULATOR),1)
 	TARGET = simulator:clang:latest
 	ARCHS = x86_64 i386
 else
-	TARGET = iphone:clang
+	TARGET = iphone:clang:8.0
 endif
 
 include $(THEOS)/makefiles/common.mk
@@ -13,7 +14,6 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = exKeyboard
 exKeyboard_FILES = Tweak.xm
 exKeyboard_FRAMEWORKS = UIKit
-exKeyboard_PRIVATE_FRAMEWORKS = TCC
 exKeyboard_LIBRARIES = substrate
 
 include $(THEOS_MAKE_PATH)/tweak.mk
@@ -26,6 +26,6 @@ internal-stage::
 all::
 ifeq ($(SIMULATOR),1)
 	@rm -f /opt/simject/$(TWEAK_NAME).dylib
-	@cp -v $(THEOS_OBJ_DIR)/*.dylib /opt/simject
-	@cp -v $(PWD)/*.plist /opt/simject
+	@cp -v $(THEOS_OBJ_DIR)/$(TWEAK_NAME).dylib /opt/simject
+	@cp -v $(PWD)/$(TWEAK_NAME).plist /opt/simject
 endif

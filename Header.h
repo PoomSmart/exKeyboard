@@ -1,5 +1,4 @@
 #import <UIKit/UIKit.h>
-#import <substrate.h>
 #import "../PS.h"
 
 @interface SBPasscodeKeyboard : UIKeyboard
@@ -32,11 +31,9 @@
 - (SBLockScreenViewController *)lockScreenViewController;
 @end
 
-@interface PKPlugInCore : NSObject
-@property(retain, nonatomic) NSDictionary *attributes;
-@property(retain, nonatomic) NSDictionary *plugInDictionary;
+@interface SBDashboardModalPresentationViewController : UIViewController
 @end
 
-@interface PKDPlugIn : PKPlugInCore
-- (NSMutableSet *)allowedTCCServices;
+@interface SBDashBoardViewController : UIViewController
+- (BOOL)isPasscodeLockVisible;
 @end

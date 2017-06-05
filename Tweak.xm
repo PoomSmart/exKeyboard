@@ -1,9 +1,5 @@
 #import "Header.h"
 
-extern CFStringRef *kTCCServiceKeyboardNetwork;
-extern CFStringRef *kTCCInfoGranted;
-extern "C" CFArrayRef TCCAccessCopyInformationForBundle(CFBundleRef);
-
 BOOL isKeyboardExtension(NSBundle *bundle){
     id val = bundle.infoDictionary[@"NSExtension"][@"NSExtensionPointIdentifier"];
     return val ? [val isEqualToString:@"com.apple.keyboard-service"] : NO;
@@ -13,20 +9,39 @@ extern "C" BOOL currentKeyboardIsThirdParty(){
     return [UIKeyboardInputModeController.sharedInputModeController.currentInputMode isExtensionInputMode];
 }
 
-extern "C" BOOL hasFixedDigitsPasscode(){
-    BOOL value = NO;
+SBLockScreenView *getLockScreenView() {
     SBLockScreenManager *manager = (SBLockScreenManager *)[%c(SBLockScreenManager) sharedInstance];
     if (manager) {
         SBLockScreenViewController *lockScreenViewController = [manager lockScreenViewController];
-        SBLockScreenView *lockScreenView = [lockScreenViewController lockScreenView];
-        if ([lockScreenView isKindOfClass:%c(SBLockScreenView)]) {
-            SBUIPasscodeLockView *view = MSHookIvar<SBUIPasscodeLockView *>(lockScreenView, "_passcodeView");
-            if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimpleFixedDigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewLongNumericKeypad)]) {
-                SBUINumericPasscodeEntryFieldBase *field = (SBUINumericPasscodeEntryFieldBase *)[(SBUIPasscodeLockViewWithKeyPad *) view _entryField];
-                if ([field isKindOfClass:%c(SBUINumericPasscodeEntryFieldBase)])
-                    value = [field _hasMaxDigitsSpecified];
+        SBLockScreenView *lockScreenView = nil;
+        if ([lockScreenViewController isKindOfClass:NSClassFromString(@"SBDashBoardViewController")]) {
+            if ([(SBDashBoardViewController *) lockScreenViewController isPasscodeLockVisible]) {
+                SBDashboardModalPresentationViewController *modal = MSHookIvar<SBDashboardModalPresentationViewController *>(lockScreenViewController, "_modalPresentationController");
+                for (UIViewController *vc in [modal contentViewControllers]) {
+                    if ([vc isKindOfClass:NSClassFromString(@"SBDashBoardPasscodeViewController")]) {
+                        lockScreenView = MSHookIvar<SBLockScreenView *>(vc, "_passcodeLockView");
+                        break;
+                    }
+                }
             }
-        }
+        } else
+            lockScreenView = [lockScreenViewController lockScreenView];
+        if ([lockScreenView isKindOfClass:%c(SBLockScreenView)])
+            return lockScreenView;
+    }
+    return nil;
+}
+
+extern "C" BOOL hasFixedDigitsPasscode(){
+    BOOL value = NO;
+    SBLockScreenView *lockScreenView = getLockScreenView();
+    if (lockScreenView == nil)
+        return NO;
+    SBUIPasscodeLockView *view = MSHookIvar<SBUIPasscodeLockView *>(lockScreenView, "_passcodeView");
+    if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimpleFixedDigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewLongNumericKeypad)]) {
+        SBUINumericPasscodeEntryFieldBase *field = (SBUINumericPasscodeEntryFieldBase *)[(SBUIPasscodeLockViewWithKeyPad *) view _entryField];
+        if ([field isKindOfClass:%c(SBUINumericPasscodeEntryFieldBase)])
+            value = [field _hasMaxDigitsSpecified];
     }
     return value;
 }
@@ -34,26 +49,19 @@ extern "C" BOOL hasFixedDigitsPasscode(){
 extern "C" void enableCustomKeyboardIfNecessary(UIPeripheralHost *self){
     if (UIApplication.sharedApplication == nil)
         return;
-    SBLockScreenManager *manager = (SBLockScreenManager *)[%c(SBLockScreenManager) sharedInstance];
-    if (manager) {
-        SBLockScreenViewController *lockScreenViewController = [manager lockScreenViewController];
-        if (![lockScreenViewController respondsToSelector:@selector(lockScreenView)]) // because it is dashboard (iOS 10) (correct?)
-            return;
-        SBLockScreenView *lockScreenView = [lockScreenViewController lockScreenView];
-        if ([lockScreenView isKindOfClass:%c(SBLockScreenView)]) {
-            SBUIPasscodeLockView *view = MSHookIvar<SBUIPasscodeLockView *>(lockScreenView, "_passcodeView");
-            if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimpleFixedDigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewLongNumericKeypad)]) {
-                SBUINumericPasscodeEntryFieldBase *field = (SBUINumericPasscodeEntryFieldBase *)[(SBUIPasscodeLockViewWithKeyPad *) view _entryField];
-                if ([field isKindOfClass:%c(SBUINumericPasscodeEntryFieldBase)])
-                    self.automaticAppearanceEnabled = ![field _hasMaxDigitsSpecified];
-            } else
-                self.automaticAppearanceEnabled = YES;
-        }
-    }
+    SBLockScreenView *lockScreenView = getLockScreenView();
+    if (lockScreenView == nil)
+        return;
+    SBUIPasscodeLockView *view = MSHookIvar<SBUIPasscodeLockView *>(lockScreenView, "_passcodeView");
+    if ([view isKindOfClass:%c(SBUIPasscodeLockViewWithKeyPad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimple4DigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewSimpleFixedDigitKeypad)] || [view isKindOfClass:%c(SBUIPasscodeLockViewLongNumericKeypad)]) {
+        SBUINumericPasscodeEntryFieldBase *field = (SBUINumericPasscodeEntryFieldBase *)[(SBUIPasscodeLockViewWithKeyPad *) view _entryField];
+        if ([field isKindOfClass:%c(SBUINumericPasscodeEntryFieldBase)])
+            self.automaticAppearanceEnabled = ![field _hasMaxDigitsSpecified];
+    } else
+        self.automaticAppearanceEnabled = YES;
 }
 
 BOOL enabled;
-BOOL noFullAccess;
 BOOL noPrivate;
 BOOL allowLS;
 
@@ -107,38 +115,6 @@ BOOL allowLS;
         }
     }
 }
-
-%end
-
-%group pkd
-
-%hook PKPlugInCore
-
-- (NSDictionary *)attributes
-{
-    NSDictionary *attrs = %orig;
-    if (enabled && noFullAccess && [self.plugInDictionary[@"NSExtensionPointIdentifier"] isEqualToString:@"com.apple.keyboard-service"]) {
-        NSMutableDictionary *m_attrs = [NSMutableDictionary dictionary];
-        [m_attrs addEntriesFromDictionary:attrs];
-        m_attrs[@"RequestsOpenAccess"] = @0;
-        return m_attrs;
-    }
-    return attrs;
-}
-
-%end
-
-%hook PKDPlugIn
-
-- (NSMutableSet *)allowedTCCServices
-{
-    NSMutableSet *set = %orig;
-    if (enabled && noFullAccess && [self.plugInDictionary[@"NSExtensionPointIdentifier"] isEqualToString:@"com.apple.keyboard-service"])
-        [set removeObject:(NSString *)kTCCServiceKeyboardNetwork];
-    return set;
-}
-
-%end
 
 %end
 
@@ -209,26 +185,6 @@ BOOL haxAllowExtensions3 = NO;
 
 %hook UIKeyboardInputModeController
 
-- (BOOL)isLockscreenPasscodeKeyboard
-{
-    BOOL orig = %orig;
-    return haxAllowExtensions2 && orig ? noPrivate : orig;
-}
-
-- (NSMutableArray *)extensionInputModes {
-    haxAllowExtensions2 = allowLS;
-    NSMutableArray *orig = %orig;
-    haxAllowExtensions2 = NO;
-    return orig;
-}
-
-- (NSMutableArray *)enabledInputModeIdentifiers:(BOOL)arg1 {
-    haxAllowExtensions2 = allowLS;
-    NSMutableArray *orig = %orig;
-    haxAllowExtensions2 = NO;
-    return orig;
-}
-
 - (UIKeyboardInputMode *)currentSystemInputMode {
     haxAllowExtensions3 = YES;
     UIKeyboardInputMode *orig = %orig;
@@ -275,20 +231,13 @@ BOOL haxAllowExtensions3 = NO;
 
 %end
 
-%end
+%hook SBLockScreenDefaults
 
-%group tccd
-
-MSHook(CFArrayRef, TCCAccessCopyInformationForBundle, CFBundleRef bundle){
-    CFArrayRef info = _TCCAccessCopyInformationForBundle(bundle);
-    //CFStringRef bundleIdentifier = CFBundleGetIdentifier(bundle);
-    if (noFullAccess) {
-        NSBundle *nsBundle = (NSBundle *)bundle;
-        if (enabled && isKeyboardExtension(nsBundle))
-            return (CFArrayRef) @[];
-    }
-    return info;
+- (BOOL)useDashBoard {
+    return NO;
 }
+
+%end
 
 %end
 
@@ -308,8 +257,6 @@ static void letsprefs(){
     NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.PS.exKeyboard.plist"];
     id object = [prefs objectForKey:@"enabled"];
     enabled = object ? [object boolValue] : YES;
-    object = [prefs objectForKey:@"noFullAccess"];
-    noFullAccess = object ? [object boolValue] : YES;
     object = [prefs objectForKey:@"noPrivate"];
     noPrivate = object ? [object boolValue] : YES;
     object = [prefs objectForKey:@"allowLS"];
@@ -324,8 +271,7 @@ static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStrin
 %ctor
 {
     NSArray *args = [[NSClassFromString(@"NSProcessInfo") processInfo] arguments];
-    NSUInteger count = args.count;
-    if (count != 0) {
+    if (args.count) {
         NSString *executablePath = args[0];
         if (executablePath) {
             NSString *processName = [executablePath lastPathComponent];
@@ -333,8 +279,9 @@ static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStrin
             BOOL isExtensionOrApp = [executablePath rangeOfString:@"/Application"].location != NSNotFound;
             BOOL isExtension = [executablePath rangeOfString:@"appex"].location != NSNotFound;
             BOOL isbackboardd = [processName isEqualToString:@"backboardd"];
-            BOOL ispkd = [processName isEqualToString:@"pkd"];
-            BOOL istccd = [processName isEqualToString:@"tccd"];
+            BOOL isassetsd = [processName isEqualToString:@"assetsd"];
+            if (isassetsd)
+                return;
             if (!isExtension && !isKeyboardExtension(NSBundle.mainBundle))
                 CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, &prefsChanged, PreferencesNotification, NULL, CFNotificationSuspensionBehaviorCoalesce);
             if (isExtensionOrApp || isSpringBoard) {
@@ -350,11 +297,6 @@ static void prefsChanged(CFNotificationCenterRef center, void *observer, CFStrin
                     %init(preiOS9);
                 }
                 %init;
-            } else if (ispkd) {
-                %init(pkd);
-            } else if (istccd) {
-                %init(tccd);
-                MSHookFunction(TCCAccessCopyInformationForBundle, MSHake(TCCAccessCopyInformationForBundle));
             } else if (isSpringBoard) {
                 %init(SpringBoard);
             } else if (isbackboardd) {
