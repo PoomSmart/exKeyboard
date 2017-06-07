@@ -1,5 +1,5 @@
 DEBUG = 1
-PACKAGE_VERSION = 1.2.5
+PACKAGE_VERSION = 1.2.6d
 GO_EASY_ON_ME = 1
 
 ifeq ($(SIMULATOR),1)
@@ -14,7 +14,7 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = exKeyboard
 exKeyboard_FILES = Tweak.xm
 exKeyboard_FRAMEWORKS = UIKit
-exKeyboard_LIBRARIES = substrate
+exKeyboard_USE_SUBSTRATE = 1
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
