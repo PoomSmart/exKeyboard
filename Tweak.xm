@@ -13,17 +13,14 @@ BOOL enabled;
 BOOL noPrivate;
 BOOL allowLS;
 
-%hook UIKeyboardImpl
+BOOL haxAllowExtensions = NO;
+BOOL haxAllowExtensionsLS = NO;
+BOOL haxAllowExtensionsNoSecure = NO;
 
-- (void)insertText: (id)text {
-    %orig;
-    /*if (text && currentKeyboardIsThirdParty()) {
-        if (self.changedDelegate == nil) {
-            [self setChanged];
-            [self callChanged];
-            self.changedDelegate = nil;
-        }
-       }*/
+%hook UITextInputTraits
+
+- (BOOL)isSecureTextEntry {
+  return haxAllowExtensionsNoSecure ? NO : %orig;
 }
 
 %end
@@ -31,12 +28,6 @@ BOOL allowLS;
 %hook UIKeyboardExtensionInputMode
 
 %group preiOS9
-
-- (BOOL)isAllowedForTraits: (UITextInputTraits *)traits {
-    if (!enabled)
-        return %orig;
-    return traits.secureTextEntry ? !noPrivate : YES;
-}
 
 - (BOOL)isDesiredForTraits:(UITextInputTraits *)traits forceASCIICapable:(BOOL)forceASCII {
     if (!enabled)
@@ -49,9 +40,17 @@ BOOL allowLS;
 %group iOS9Up
 
 - (BOOL)isDesiredForTraits: (UITextInputTraits *)traits {
-    if (!enabled)
-        return %orig;
-    return traits.secureTextEntry ? !noPrivate : YES;
+    if (enabled) {
+        if (traits.secureTextEntry && !noPrivate)
+            haxAllowExtensionsNoSecure = YES;
+        if (allowLS)
+            haxAllowExtensionsLS = YES;
+        BOOL orig = %orig;
+        haxAllowExtensionsNoSecure = NO;
+        haxAllowExtensionsLS = NO;
+        return orig;
+    }
+    return %orig;
 }
 
 %end
@@ -59,8 +58,6 @@ BOOL allowLS;
 %end
 
 %group iOS10Up
-
-BOOL haxAllowExtensions = NO;
 
 %hook UIKeyboardImpl
 
@@ -110,6 +107,10 @@ BOOL haxAllowExtensions = NO;
     UIKeyboardInputMode *orig = %orig;
     haxAllowExtensions = NO;
     return orig;
+}
+
+- (BOOL)deviceStateIsLocked {
+  return haxAllowExtensionsLS ? NO : %orig;
 }
 
 %end
